@@ -1,118 +1,108 @@
 # Online Compliance Bot
 
-A modular Python 3.11+ scaffold for automating multi-state unclaimed property reporting with Playwright.
-
-## Purpose
-
-This project is designed for shared team usage (including shared OneDrive folders). It reads:
-
-1. `sample_data/all_holder_information.xlsx` (holder master data)
-2. `sample_data/filing_queue.xlsx` (filing execution queue)
-
-Then it matches each filing by `holder_id`, resolves the expected NAUPA file path, and calls a state-specific module in `states/`.
-
-## Folder Structure
+## Project Structure
 
 ```
 Online_Compliance_Bot/
-├── main.py
-├── config.py
-├── path_utils.py
-├── excel_loader.py
-├── models.py
-├── validation.py
-├── logging_utils.py
-├── state_registry.py
-├── create_sample_workbooks.py
-├── requirements.txt
-├── README.md
-├── .gitignore
-├── sample_data/
-│   ├── all_holder_information.xlsx
-│   └── filing_queue.xlsx
-├── states/
-│   ├── __init__.py
-│   ├── base_state.py
-│   ├── alabama.py
-│   ├── alaska.py
-│   ├── arkansas.py
-│   ├── california.py
-│   ├── colorado.py
-│   ├── connecticut.py
-│   ├── delaware.py
-│   ├── idaho.py
-│   ├── illinois.py
-│   └── indiana.py
-└── clients/
-    └── Amazon/
-        ├── AL/
-        ├── AK/
-        ├── AR/
-        ├── CA/
-        ├── CO/
-        ├── CT/
-        ├── DE/
-        ├── ID/
-        ├── IL/
-        └── IN/
+│
+├── code/
+│   ├── main.py
+│   ├── config.py
+│   ├── excel_loader.py
+│   ├── path_utils.py
+│   ├── state_registry.py
+│   ├── utils.py
+│   ├── models.py
+│   ├── validation.py
+│   └── states/
+│       ├── __init__.py
+│       ├── base_state.py
+│       ├── alabama.py
+│       ├── alaska.py
+│       ├── arkansas.py
+│       ├── california.py
+│       ├── colorado.py
+│       ├── connecticut.py
+│       ├── delaware.py
+│       ├── idaho.py
+│       ├── illinois.py
+│       └── indiana.py
+│
+├── Amazon/
+│   ├── CA.txt
+│   └── NY.txt
+│
+├── Walmart/
+│   └── CA.txt
+│
+└── README.md
 ```
 
-## Setup
+## Required Setup
+
+Before running the bot, you must manually create these Excel files in the **project root**:
+
+1. `all_holder_information.xlsx`
+2. `filing_execution.xlsx`
+
+The project **does not generate Excel files automatically**.
+
+### Required columns: all_holder_information.xlsx
+
+- `holder_id`
+- `company_name`
+- `holder_name`
+- `contact_name`
+- `contact_phone`
+- `email`
+
+### Required columns: filing_execution.xlsx
+
+- `filing_id`
+- `holder_id`
+- `company_name`
+- `state_code`
+- `amount_to_remit`
+- `naupa_file_name`
+- `status`
+
+If either workbook is missing, the bot raises a clear error message such as:
+
+`Missing required file: all_holder_information.xlsx. Please create it manually.`
+
+## NAUPA / file location rule
+
+NAUPA files are stored directly inside each company folder at project root.
+
+Example resolution:
+- `company_name = Amazon`
+- `naupa_file_name = CA.txt`
+- resolved path: `Online_Compliance_Bot/Amazon/CA.txt`
+
+## How to run
+
+From repository root:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m playwright install
+cd code
+py main.py --company Amazon
 ```
 
-## Create / Refresh Sample Excel Workbooks
+Other examples:
 
 ```bash
-python create_sample_workbooks.py
+cd code
+py main.py
+py main.py --state CA
+py main.py --holder-id 1
+py main.py --status pending
 ```
 
-The generated workbooks include:
-- Holder master rows for Amazon, Walmart, and Target.
-- Filing queue rows including positive and negative (amount `0`) examples.
-- Multiple states for one company.
+## Add more states
 
-## How NAUPA File Resolution Works
+1. Add a new module under `code/states/`.
+2. Expose `run_<state>(context, company_data, filing_data)`.
+3. Register it in `code/state_registry.py`.
+4. Add the state code to `SUPPORTED_STATES` in `code/config.py`.
 
-For each filing row, the bot builds:
-
-`clients/<company_name>/<state_code>/<naupa_file_name>`
-
-Example:
-
-`clients/Amazon/CA/amazon_ca_2025.hde`
-
-## Run the Bot
-
-```bash
-python main.py
-python main.py --state CA
-python main.py --holder-id 1
-python main.py --company Amazon
-python main.py --status pending
-python main.py --status pending --state CO --headless
-```
-
-## Adding a New State Module
-
-1. Add a new state file in `states/` (for example `florida.py`).
-2. Add a runner function in that file (for example `run_florida(context, company_data, filing_data)`).
-3. Register the module/function mapping in `state_registry.py`.
-4. Add the state abbreviation to `SUPPORTED_STATES` in `config.py`.
-5. Create client folders as needed under `clients/<Company>/<STATE>/`.
-
-## Notes on State Flexibility
-
-Each state module is intentionally a stub with TODO steps:
-- open page
-- fill holder information
-- fill report information
-- upload NAUPA file
-- return status
-
-This keeps the scaffold stable while allowing each state team member to paste in custom Playwright logic.
+This keeps the scaffold modular so state-specific logic can be plugged in incrementally.
