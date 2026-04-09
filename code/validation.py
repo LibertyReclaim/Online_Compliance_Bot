@@ -1,7 +1,9 @@
 from pathlib import Path
 from typing import Iterable
 
-from config import SUPPORTED_STATES
+from config import SUPPORTED_STATES as CONFIG_SUPPORTED_STATES
+
+SUPPORTED_STATES = set(CONFIG_SUPPORTED_STATES) | {"NY"}
 
 
 def validate_required_columns(columns: Iterable[str], required_columns: list[str], file_label: str) -> None:

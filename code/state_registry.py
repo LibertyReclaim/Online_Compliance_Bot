@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from importlib import import_module
 from typing import Callable
 
-# Placeholder registry for future state modules.
-# Example future entry:
-# STATE_MODULES["CA"] = "states.california:run_california"
-STATE_MODULES: dict[str, str] = {}
+# State registry.
+# Key: state code, Value: (<module path>, <runner function>)
+STATE_MODULES: dict[str, tuple[str, str]] = {
+    "NY": ("states.newyork", "run"),
+}
 
 
 def get_state_runner(state_code: str) -> Callable:
@@ -16,5 +18,9 @@ def get_state_runner(state_code: str) -> Callable:
             "Add a state runner under code/states and register it in state_registry.py."
         )
 
-    # Placeholder for future dynamic import implementation when modules are added.
-    raise NotImplementedError("State registry import wiring will be enabled when state modules are added.")
+    module_path, function_name = STATE_MODULES[code]
+    module = import_module(module_path)
+    runner = getattr(module, function_name, None)
+    if runner is None:
+        raise AttributeError(f"Runner '{function_name}' not found in module '{module_path}'")
+    return runner
