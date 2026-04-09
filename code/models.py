@@ -22,6 +22,14 @@ class PaymentRecord:
 
 
 @dataclass
+class StateRunContext:
+    state_code: str
+    naupa_file_path: Path
+    is_negative_report: bool
+    run_headless: bool = False
+
+
+@dataclass
 class RunResult:
     payment_id: str
     state_code: str

@@ -4,10 +4,9 @@ import argparse
 from typing import Iterable
 
 from config import HOLDER_INFORMATION_FILE, PAYMENT_FILE
-from models import PaymentRecord, RunResult
+from models import PaymentRecord, RunResult, StateRunContext
 from path_utils import build_naupa_file_path
 from state_registry import get_state_runner
-from states.base_state import StateContext
 from utils import setup_logger
 from validation import (
     validate_holder_exists,
@@ -76,7 +75,7 @@ def run() -> list[RunResult]:
             naupa_path = build_naupa_file_path(payment.company_name, payment.naupa_file_name)
             validate_naupa_file_exists(naupa_path)
 
-            context = StateContext(
+            context = StateRunContext(
                 state_code=payment.state_code,
                 naupa_file_path=naupa_path,
                 is_negative_report=negative,
@@ -93,7 +92,7 @@ def run() -> list[RunResult]:
             )
 
             runner = get_state_runner(payment.state_code)
-            state_output = runner(context=context, company_data=holder.data, filing_data=payment.data)
+            state_output = runner(context=context, company_data=holder.data, payment_data=payment.data)
             results.append(
                 RunResult(
                     payment_id=payment.payment_id,
