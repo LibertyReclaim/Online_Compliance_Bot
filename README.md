@@ -15,7 +15,8 @@ Online_Compliance_Bot/
 │   ├── models.py
 │   ├── validation.py
 │   └── states/
-│       └── __init__.py
+│       ├── __init__.py
+│       └── newyork.py
 │
 ├── state_payment_guides/
 │   └── .gitkeep
@@ -23,7 +24,10 @@ Online_Compliance_Bot/
 ├── Amazon/
 ├── Walmart/
 │
-└── README.md
+├── holder_information.xlsx
+├── payment_file.xlsx
+├── README.md
+└── .gitignore
 ```
 
 ## Key Rules
@@ -32,7 +36,7 @@ Online_Compliance_Bot/
 - Future state modules will be added under `code/states/` one by one and tested one by one.
 - No root-level Python files are used.
 - No `clients/`, `sample_data/`, or root `states/` folders are used.
-- No `.xlsx` files are included in this repository.
+- `holder_information.xlsx` and `payment_file.xlsx` are kept in the project root.
 
 ## Manual workbook setup (required)
 
