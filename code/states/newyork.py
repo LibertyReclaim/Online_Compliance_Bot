@@ -684,16 +684,8 @@ def _merged_context(holder_data: dict[str, Any], payment_data: dict[str, Any]) -
     return context
 
 
-def run(page: Page, holder_data: dict[str, Any], payment_data: dict[str, Any], naupa_file_path: str | Path) -> None:
-    """
-    New York flow:
-    1) Open holder page
-    2) Fill holder + payment front page data
-    3) Click Next
-    4) Upload txt NAUPA file
-    5) Click Next
-    6) Stop at preview/signature page for manual sign + submit
-    """
+def _run_with_page(page: Page, holder_data: dict[str, Any], payment_data: dict[str, Any], naupa_file_path: str | Path) -> None:
+    """Internal NY flow implementation using explicit page and NAUPA path."""
     merged = _merged_context(holder_data, payment_data)
     naupa_path = Path(naupa_file_path)
 
@@ -787,3 +779,38 @@ def run(page: Page, holder_data: dict[str, Any], payment_data: dict[str, Any], n
     _log("Pausing indefinitely for manual review/sign/submit.")
     while True:
         page.wait_for_timeout(60_000)
+
+
+def run(context: Any, company_data: dict[str, Any], payment_data: dict[str, Any]) -> dict[str, Any]:
+    """
+    Public NY runner compatible with main.py registry invocation:
+    run(context, company_data, payment_data)
+
+    Expected context attributes:
+    - page: Playwright Page object
+    - naupa_file_path: path to the NAUPA txt file
+    """
+    page = getattr(context, "page", None)
+    naupa_file_path = getattr(context, "naupa_file_path", None)
+
+    if page is None:
+        raise ValueError(
+            "New York runner requires context.page (Playwright Page). "
+            "Attach a Page object to context before invoking run()."
+        )
+    if naupa_file_path is None:
+        raise ValueError("New York runner requires context.naupa_file_path.")
+
+    _run_with_page(
+        page=page,
+        holder_data=company_data,
+        payment_data=payment_data,
+        naupa_file_path=naupa_file_path,
+    )
+
+    return {
+        "success": True,
+        "message": "Reached preview page. Review, sign, and submit manually.",
+        "state": "NY",
+        "naupa_file": str(naupa_file_path),
+    }

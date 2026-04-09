@@ -27,6 +27,7 @@ class StateRunContext:
     naupa_file_path: Path
     is_negative_report: bool
     run_headless: bool = False
+    page: Any | None = None
 
 
 @dataclass
