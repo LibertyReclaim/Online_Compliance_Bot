@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Iterable
 
 from config import SUPPORTED_STATES
@@ -16,4 +17,14 @@ def validate_state_code(state_code: str) -> None:
 
 def validate_holder_exists(holder_id: str, holder_map: dict[str, object]) -> None:
     if holder_id not in holder_map:
-        raise ValueError(f"holder_id '{holder_id}' was not found in all_holder_information.xlsx")
+        raise ValueError(f"holder_id '{holder_id}' was not found in holder_information.xlsx")
+
+
+def validate_required_file_exists(file_path: Path, display_name: str) -> None:
+    if not file_path.exists():
+        raise FileNotFoundError(f"Missing required file: {display_name}. Please create it manually.")
+
+
+def validate_naupa_file_exists(file_path: Path) -> None:
+    if not file_path.exists():
+        raise FileNotFoundError(f"Missing required NAUPA file: {file_path}")

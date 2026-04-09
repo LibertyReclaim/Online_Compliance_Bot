@@ -10,8 +10,8 @@ class HolderRecord:
 
 
 @dataclass
-class FilingRecord:
-    filing_id: str
+class PaymentRecord:
+    payment_id: str
     holder_id: str
     company_name: str
     state_code: str
@@ -23,7 +23,7 @@ class FilingRecord:
 
 @dataclass
 class RunResult:
-    filing_id: str
+    payment_id: str
     state_code: str
     success: bool
     message: str

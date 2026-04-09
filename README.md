@@ -28,56 +28,89 @@ Online_Compliance_Bot/
 │       ├── illinois.py
 │       └── indiana.py
 │
+├── holder_information.xlsx   # create manually
+├── payment_file.xlsx         # create manually
+│
 ├── Amazon/
 │   ├── CA.txt
 │   └── NY.txt
 │
-├── Walmart/
-│   └── CA.txt
-│
-└── README.md
+└── Walmart/
+    └── CA.txt
 ```
 
-## Required Setup
+## Two-workbook model
 
-Before running the bot, you must manually create these Excel files in the **project root**:
+The bot uses two manually maintained workbooks in the project root:
 
-1. `all_holder_information.xlsx`
-2. `filing_execution.xlsx`
+1. `holder_information.xlsx`
+   - Master holder/company data reused across filings.
+   - Match key: `holder_id`.
 
-The project **does not generate Excel files automatically**.
+2. `payment_file.xlsx`
+   - Execution queue; each row is one state filing/payment run.
+   - Blank until your team is ready to execute filings.
 
-### Required columns: all_holder_information.xlsx
+The repository does **not** generate workbook files automatically.
+
+## Required columns
+
+### holder_information.xlsx (minimum required)
 
 - `holder_id`
 - `company_name`
 - `holder_name`
+- `holder_tax_id`
+- `holder_id_secondary`
 - `contact_name`
 - `contact_phone`
+- `phone_extension`
 - `email`
+- `email_confirmation`
+- `address_1`
+- `address_2`
+- `city`
+- `state`
+- `zip`
+- `country`
 
-### Required columns: filing_execution.xlsx
+> You can add additional holder columns as new state workflows require them.
 
-- `filing_id`
+### payment_file.xlsx (minimum required)
+
+- `payment_id`
 - `holder_id`
 - `company_name`
 - `state_code`
 - `amount_to_remit`
+- `funds_remitted_via`
+- `report_year`
+- `report_type`
 - `naupa_file_name`
 - `status`
+- `notes`
 
-If either workbook is missing, the bot raises a clear error message such as:
+> You can add additional payment columns later for state-specific needs.
 
-`Missing required file: all_holder_information.xlsx. Please create it manually.`
+## Workflow
 
-## NAUPA / file location rule
+1. Read `payment_file.xlsx`.
+2. For each row, match `holder_id` to `holder_information.xlsx`.
+3. Determine report type:
+   - `amount_to_remit == 0` → negative report
+   - `amount_to_remit > 0` → positive report
+4. Load state runner from `code/states/`.
+5. Resolve NAUPA file path from root company folder:
+   - `PROJECT_ROOT / company_name / naupa_file_name`
+   - Example: `PROJECT_ROOT / "Amazon" / "NY.txt"`
+6. Execute state-specific logic.
 
-NAUPA files are stored directly inside each company folder at project root.
+## Validation behavior
 
-Example resolution:
-- `company_name = Amazon`
-- `naupa_file_name = CA.txt`
-- resolved path: `Online_Compliance_Bot/Amazon/CA.txt`
+- Missing `holder_information.xlsx` → clear error.
+- Missing `payment_file.xlsx` → clear error.
+- Unknown `holder_id` in payment row → clear error.
+- Missing NAUPA file in company folder → clear error.
 
 ## How to run
 

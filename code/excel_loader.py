@@ -4,8 +4,8 @@ from typing import Any
 
 import pandas as pd
 
-from config import FILING_WORKBOOK, HOLDER_WORKBOOK
-from models import FilingRecord, HolderRecord
+from config import HOLDER_INFORMATION_FILE, PAYMENT_FILE
+from models import HolderRecord, PaymentRecord
 from validation import validate_required_columns
 
 REQUIRED_HOLDER_COLUMNS = [
@@ -17,14 +17,18 @@ REQUIRED_HOLDER_COLUMNS = [
     "email",
 ]
 
-REQUIRED_FILING_COLUMNS = [
-    "filing_id",
+REQUIRED_PAYMENT_COLUMNS = [
+    "payment_id",
     "holder_id",
     "company_name",
     "state_code",
     "amount_to_remit",
+    "funds_remitted_via",
+    "report_year",
+    "report_type",
     "naupa_file_name",
     "status",
+    "notes",
 ]
 
 
@@ -47,9 +51,9 @@ def _clean_value(value: Any) -> Any:
 
 
 def load_holder_records() -> dict[str, HolderRecord]:
-    df = pd.read_excel(HOLDER_WORKBOOK, engine="openpyxl")
+    df = pd.read_excel(HOLDER_INFORMATION_FILE, engine="openpyxl")
     df = _normalize_dataframe(df)
-    validate_required_columns(df.columns, REQUIRED_HOLDER_COLUMNS, "all_holder_information.xlsx")
+    validate_required_columns(df.columns, REQUIRED_HOLDER_COLUMNS, "holder_information.xlsx")
 
     holders: dict[str, HolderRecord] = {}
     for row in df.to_dict(orient="records"):
@@ -59,18 +63,18 @@ def load_holder_records() -> dict[str, HolderRecord]:
     return holders
 
 
-def load_filing_records() -> list[FilingRecord]:
-    df = pd.read_excel(FILING_WORKBOOK, engine="openpyxl")
+def load_payment_records() -> list[PaymentRecord]:
+    df = pd.read_excel(PAYMENT_FILE, engine="openpyxl")
     df = _normalize_dataframe(df)
-    validate_required_columns(df.columns, REQUIRED_FILING_COLUMNS, "filing_execution.xlsx")
+    validate_required_columns(df.columns, REQUIRED_PAYMENT_COLUMNS, "payment_file.xlsx")
 
-    filings: list[FilingRecord] = []
+    payments: list[PaymentRecord] = []
     for row in df.to_dict(orient="records"):
         cleaned = {k: _clean_value(v) for k, v in row.items()}
         amount = float(cleaned.get("amount_to_remit") or 0)
-        filings.append(
-            FilingRecord(
-                filing_id=str(cleaned["filing_id"]).strip(),
+        payments.append(
+            PaymentRecord(
+                payment_id=str(cleaned["payment_id"]).strip(),
                 holder_id=str(cleaned["holder_id"]).strip(),
                 company_name=str(cleaned.get("company_name") or "").strip(),
                 state_code=str(cleaned.get("state_code") or "").strip().upper(),
@@ -80,4 +84,4 @@ def load_filing_records() -> list[FilingRecord]:
                 data=cleaned,
             )
         )
-    return filings
+    return payments
