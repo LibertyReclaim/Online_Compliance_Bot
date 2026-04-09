@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Iterable
 
 from config import SUPPORTED_STATES as CONFIG_SUPPORTED_STATES
+from path_utils import build_naupa_file_path, construct_naupa_file_name
 
 SUPPORTED_STATES = set(CONFIG_SUPPORTED_STATES) | {"NY"}
 
@@ -27,6 +28,20 @@ def validate_required_file_exists(file_path: Path, display_name: str) -> None:
         raise FileNotFoundError(f"Missing required file: {display_name}. Please create it manually.")
 
 
-def validate_naupa_file_exists(file_path: Path) -> None:
-    if not file_path.exists():
-        raise FileNotFoundError(f"Missing required NAUPA file: {file_path}")
+def validate_naupa_file_exists(company_name: str, state_code: str, report_year: str | int) -> Path:
+    constructed_file_name = construct_naupa_file_name(company_name, state_code, report_year)
+    full_file_path = build_naupa_file_path(company_name, state_code, report_year)
+
+    print(
+        "[NAUPA DEBUG] "
+        f"company_name={company_name!r} "
+        f"state_code={state_code!r} "
+        f"report_year={report_year!r} "
+        f"constructed_file_name={constructed_file_name!r} "
+        f"full_file_path={str(full_file_path)!r}"
+    )
+
+    if not full_file_path.exists():
+        raise FileNotFoundError(f"Missing required NAUPA file: {full_file_path}")
+
+    return full_file_path

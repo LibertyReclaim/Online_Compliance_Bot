@@ -5,7 +5,6 @@ from typing import Iterable
 
 from config import HOLDER_INFORMATION_FILE, PAYMENT_FILE
 from models import PaymentRecord, RunResult, StateRunContext
-from path_utils import build_naupa_file_path
 from state_registry import get_state_runner
 from utils import setup_logger
 from validation import (
@@ -72,8 +71,12 @@ def run() -> list[RunResult]:
 
             holder = holders[payment.holder_id]
             negative = is_negative_report(payment.amount_to_remit)
-            naupa_path = build_naupa_file_path(payment.company_name, payment.naupa_file_name)
-            validate_naupa_file_exists(naupa_path)
+            report_year = payment.data.get("report_year")
+            naupa_path = validate_naupa_file_exists(
+                company_name=payment.company_name,
+                state_code=payment.state_code,
+                report_year=report_year,
+            )
 
             context = StateRunContext(
                 state_code=payment.state_code,
@@ -83,10 +86,11 @@ def run() -> list[RunResult]:
             )
 
             logger.info(
-                "Starting payment_id=%s company=%s state=%s negative=%s file=%s",
+                "Starting payment_id=%s company=%s state=%s report_year=%s negative=%s file=%s",
                 payment.payment_id,
                 payment.company_name,
                 payment.state_code,
+                report_year,
                 negative,
                 naupa_path,
             )
