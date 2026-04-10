@@ -1,0 +1,155 @@
+from __future__ import annotations
+
+import argparse
+import traceback
+from typing import Iterable
+
+from playwright.sync_api import sync_playwright
+
+from config import HOLDER_INFORMATION_FILE, PAYMENT_FILE
+from models import PaymentRecord, RunResult, StateRunContext
+from state_registry import get_state_runner
+from utils import setup_logger
+from validation import (
+    validate_holder_exists,
+    validate_naupa_file_exists,
+    validate_required_file_exists,
+    validate_state_code,
+)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Online Compliance Bot runner")
+    parser.add_argument("--holder-id", help="Filter by holder_id")
+    parser.add_argument("--company", help="Filter by company name (case-insensitive contains)")
+    parser.add_argument("--state", help="Filter by state abbreviation")
+    parser.add_argument("--status", help="Filter by payment status, e.g. pending")
+    parser.add_argument("--headless", action="store_true", help="Reserved flag; NY currently runs headed")
+    return parser.parse_args()
+
+
+def is_negative_report(amount_to_remit: float) -> bool:
+    return float(amount_to_remit) == 0
+
+
+def filter_payments(payments: Iterable[PaymentRecord], args: argparse.Namespace) -> list[PaymentRecord]:
+    filtered = list(payments)
+    if args.holder_id:
+        filtered = [p for p in filtered if p.holder_id == str(args.holder_id)]
+    if args.company:
+        company = args.company.strip().lower()
+        filtered = [p for p in filtered if company in p.company_name.lower()]
+    if args.state:
+        filtered = [p for p in filtered if p.state_code == args.state.strip().upper()]
+    if args.status:
+        filtered = [p for p in filtered if p.status == args.status.strip().lower()]
+    return filtered
+
+
+def ensure_required_input_files() -> None:
+    validate_required_file_exists(HOLDER_INFORMATION_FILE, "holder_information.xlsx")
+    validate_required_file_exists(PAYMENT_FILE, "payment_file.xlsx")
+
+
+def run() -> list[RunResult]:
+    logger = setup_logger()
+    args = parse_args()
+
+    ensure_required_input_files()
+
+    from excel_loader import load_holder_records, load_payment_records
+
+    holders = load_holder_records()
+    payments = filter_payments(load_payment_records(), args)
+    results: list[RunResult] = []
+
+    if not payments:
+        logger.info("No payment rows matched the provided filters.")
+        return results
+
+    for payment in payments:
+        browser = None
+        browser_context = None
+        playwright = None
+
+        try:
+            validate_holder_exists(payment.holder_id, holders)
+            validate_state_code(payment.state_code)
+
+            holder = holders[payment.holder_id]
+            negative = is_negative_report(payment.amount_to_remit)
+            report_year = payment.data.get("report_year")
+            naupa_path = validate_naupa_file_exists(
+                company_name=payment.company_name,
+                state_code=payment.state_code,
+                report_year=report_year,
+            )
+
+            logger.info(
+                "Starting payment_id=%s company=%s state=%s report_year=%s negative=%s file=%s",
+                payment.payment_id,
+                payment.company_name,
+                payment.state_code,
+                report_year,
+                negative,
+                naupa_path,
+            )
+
+            # Required runtime setup: headed Playwright browser + page attached to context.
+            playwright = sync_playwright().start()
+            browser = playwright.chromium.launch(headless=False)
+            browser_context = browser.new_context()
+            page = browser_context.new_page()
+
+            context = StateRunContext(
+                state_code=payment.state_code,
+                naupa_file_path=naupa_path,
+                is_negative_report=negative,
+                run_headless=False,
+                page=page,
+            )
+
+            runner = get_state_runner(payment.state_code)
+            state_output = runner(context=context, company_data=holder.data, payment_data=payment.data)
+
+            # If a state runner returns, treat it as success and keep details.
+            results.append(
+                RunResult(
+                    payment_id=payment.payment_id,
+                    state_code=payment.state_code,
+                    success=bool(state_output.get("success", True)),
+                    message=state_output.get("message", "Completed"),
+                    naupa_file_path=naupa_path,
+                    details=state_output,
+                )
+            )
+            logger.info("Finished payment_id=%s", payment.payment_id)
+
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed payment_id=%s: %s", payment.payment_id, exc)
+            traceback.print_exc()
+            results.append(
+                RunResult(
+                    payment_id=payment.payment_id,
+                    state_code=payment.state_code,
+                    success=False,
+                    message=str(exc),
+                )
+            )
+
+            # Close browser cleanly on failure before preview flow is reached.
+            try:
+                if browser_context is not None:
+                    browser_context.close()
+                if browser is not None:
+                    browser.close()
+                if playwright is not None:
+                    playwright.stop()
+            except Exception as close_exc:  # noqa: BLE001
+                logger.warning("Cleanup after failure also failed: %s", close_exc)
+
+    return results
+
+
+if __name__ == "__main__":
+    run()
