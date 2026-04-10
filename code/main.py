@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import traceback
 from typing import Iterable
+
+from playwright.sync_api import sync_playwright
 
 from config import HOLDER_INFORMATION_FILE, PAYMENT_FILE
 from models import PaymentRecord, RunResult, StateRunContext
@@ -21,7 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--company", help="Filter by company name (case-insensitive contains)")
     parser.add_argument("--state", help="Filter by state abbreviation")
     parser.add_argument("--status", help="Filter by payment status, e.g. pending")
-    parser.add_argument("--headless", action="store_true", help="Run Playwright in headless mode")
+    parser.add_argument("--headless", action="store_true", help="Reserved flag; NY currently runs headed")
     return parser.parse_args()
 
 
@@ -65,6 +68,10 @@ def run() -> list[RunResult]:
         return results
 
     for payment in payments:
+        browser = None
+        browser_context = None
+        playwright = None
+
         try:
             validate_holder_exists(payment.holder_id, holders)
             validate_state_code(payment.state_code)
@@ -78,13 +85,6 @@ def run() -> list[RunResult]:
                 report_year=report_year,
             )
 
-            context = StateRunContext(
-                state_code=payment.state_code,
-                naupa_file_path=naupa_path,
-                is_negative_report=negative,
-                run_headless=args.headless,
-            )
-
             logger.info(
                 "Starting payment_id=%s company=%s state=%s report_year=%s negative=%s file=%s",
                 payment.payment_id,
@@ -95,8 +95,24 @@ def run() -> list[RunResult]:
                 naupa_path,
             )
 
+            # Required runtime setup: headed Playwright browser + page attached to context.
+            playwright = sync_playwright().start()
+            browser = playwright.chromium.launch(headless=False)
+            browser_context = browser.new_context()
+            page = browser_context.new_page()
+
+            context = StateRunContext(
+                state_code=payment.state_code,
+                naupa_file_path=naupa_path,
+                is_negative_report=negative,
+                run_headless=False,
+                page=page,
+            )
+
             runner = get_state_runner(payment.state_code)
             state_output = runner(context=context, company_data=holder.data, payment_data=payment.data)
+
+            # If a state runner returns, treat it as success and keep details.
             results.append(
                 RunResult(
                     payment_id=payment.payment_id,
@@ -111,6 +127,7 @@ def run() -> list[RunResult]:
 
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed payment_id=%s: %s", payment.payment_id, exc)
+            traceback.print_exc()
             results.append(
                 RunResult(
                     payment_id=payment.payment_id,
@@ -119,6 +136,17 @@ def run() -> list[RunResult]:
                     message=str(exc),
                 )
             )
+
+            # Close browser cleanly on failure before preview flow is reached.
+            try:
+                if browser_context is not None:
+                    browser_context.close()
+                if browser is not None:
+                    browser.close()
+                if playwright is not None:
+                    playwright.stop()
+            except Exception as close_exc:  # noqa: BLE001
+                logger.warning("Cleanup after failure also failed: %s", close_exc)
 
     return results
 
